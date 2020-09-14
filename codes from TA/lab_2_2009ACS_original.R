@@ -82,7 +82,7 @@ palette5 <- c("#f0f9e8","#bae4bc","#7bccc4","#43a2ca","#0868ac")
 
 # Load census API key
 
-census_api_key("88ad20e0548826a9e0009ebde6aa0eaa1dda1552", overwrite = TRUE, install = T)
+census_api_key("e79f3706b6d61249968c6ce88794f6f556e5bf3d", overwrite = TRUE)
 
 # ---- Year 2009 tracts -----
 
@@ -310,47 +310,23 @@ selectCentroids <-
 # Consult the text for some operations you can try
 # This is to be done in breakout groups
 
-# ---- Indicator Maps ----
+######## Answer ##############################################
+myData  <- rbind(selectCentroids, clip) %>%
+  rbind(., selection)
 
-# We do our centroid joins as above, and then do a "disjoin" to get the ones that *don't*
-# join, and add them all together.
-# Do this operation and then examine it.
-# What represents the joins/doesn't join dichotomy?
-# Note that this contains a correct 2009-2017 inflation calculation
-
-allTracts.group <- 
-  rbind(
-    st_centroid(allTracts)[buffer,] %>%
-      st_drop_geometry() %>%
-      left_join(allTracts) %>%
-      st_sf() %>%
-      mutate(TOD = "TOD"),
-    st_centroid(allTracts)[buffer, op = st_disjoint] %>%
-      st_drop_geometry() %>%
-      left_join(allTracts) %>%
-      st_sf() %>%
-      mutate(TOD = "Non-TOD")) %>%
-  mutate(MedRent.inf = ifelse(year == "2009", MedRent * 1.14, MedRent)) 
-
-
-# Can you try to create the maps seen in the text?
-
-ggplot() +
-  geom_sf(data=allTracts.group) +
-  geom_sf(data=allTracts.group, show.legend = "point") +
-  facet_wrap(~year) + 
-  labs(caption = "Figure 2.6") +
-  mapTheme()
-
-ggplot() +
-  geom_sf(data = allTracts.group, aes(fill = q5(estimate))) +
+ggplot(myData)+
+  geom_sf(data = st_union(tracts09))+
+  geom_sf(aes(fill = q5(TotalPop))) +
   scale_fill_manual(values = palette5,
-                    labels = qBr(totalPop09, "estimate"),
+                    labels = qBr(myData, "TotalPop"),
                     name = "Popluation\n(Quintile Breaks)") +
   labs(title = "Total Population", subtitle = "Philadelphia; 2009") +
-  mapTheme() + theme(plot.title = element_text(size=22))+facet_wrap(~year) 
+  facet_wrap(~Selection_Type)+
+  mapTheme() + 
+  theme(plot.title = element_text(size=22))
 
-################# above is the practice, didn't succeed ######################
+
+# 1.3.1 Maps
 
 ggplot(allTracts.group)+
   geom_sf(data = st_union(tracts09))+
@@ -373,8 +349,58 @@ ggplot(allTracts.group)+
   mapTheme() + 
   theme(plot.title = element_text(size=22))
 
-################# Above is the answer ###########################
+#1.4 Submarkets
 
+# As a map
+
+ggplot(allTracts.threeMarkets)+
+  geom_sf(data = st_union(tracts09))+
+  geom_sf(aes(fill = Submarket))+
+  scale_fill_manual(values = c("orange", "green", "blue", "black"))+
+  labs(title = "Three Submarkets As Tracts") +
+  mapTheme()
+
+# As a facetted plot
+
+st_drop_geometry(allTracts.threeMarkets) %>%
+  group_by(year, Submarket) %>%
+  summarize(Rent = mean(MedRent, na.rm = T),
+            Population = mean(TotalPop, na.rm = T),
+            Percent_White = mean(pctWhite, na.rm = T),
+            Percent_Bach = mean(pctBachelors, na.rm = T),
+            Percent_Poverty = mean(pctPoverty, na.rm = T)) %>%
+  gather(Variable, Value, -year, -Submarket) %>%
+  ggplot(aes(year, Value, fill = Submarket)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~Variable, scales = "free", ncol=5) +
+  scale_fill_manual(values = c("orange", "green", "blue", "black"))+
+  labs(title = "Indicator differences across submarkets") +
+  plotTheme() + theme(legend.position="bottom")
+
+
+# ---- Indicator Maps ----
+
+# We do our centroid joins as above, and then do a "disjoin" to get the ones that *don't*
+# join, and add them all together.
+# Do this operation and then examine it.
+# What represents the joins/doesn't join dichotomy?
+# Note that this contains a correct 2009-2017 inflation calculation
+
+allTracts.group <- 
+  rbind(
+    st_centroid(allTracts)[buffer,] %>%
+      st_drop_geometry() %>%
+      left_join(allTracts) %>%
+      st_sf() %>%
+      mutate(TOD = "TOD"),
+    st_centroid(allTracts)[buffer, op = st_disjoint] %>%
+      st_drop_geometry() %>%
+      left_join(allTracts) %>%
+      st_sf() %>%
+      mutate(TOD = "Non-TOD")) %>%
+  mutate(MedRent.inf = ifelse(year == "2009", MedRent * 1.14, MedRent)) 
+
+# Can you try to create the maps seen in the text?
 # The solutions are contained in "map_exercise.R"
 
 # --- TOD Indicator Tables ----
